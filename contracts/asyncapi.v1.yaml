@@ -1,0 +1,228 @@
+asyncapi: 3.0.0
+info:
+  title: bank-sync-events
+  version: 1.0.0
+  description: Bank synchronization event stream
+servers:
+  redis:
+    host: redis:6379
+    protocol: redis
+    description: Redis Streams for event publishing
+channels:
+  bank.tx.created:
+    address: bank.tx.created
+    description: New bank transaction detected
+    messages:
+      TxCreated:
+        $ref: "#/components/messages/TxCreated"
+  bank.sync.completed:
+    address: bank.sync.completed
+    description: Sync operation completed successfully
+    messages:
+      SyncCompleted:
+        $ref: "#/components/messages/SyncCompleted"
+  bank.sync.failed:
+    address: bank.sync.failed
+    description: Sync operation failed
+    messages:
+      SyncFailed:
+        $ref: "#/components/messages/SyncFailed"
+  bank.account.updated:
+    address: bank.account.updated
+    description: Account information updated
+    messages:
+      AccountUpdated:
+        $ref: "#/components/messages/AccountUpdated"
+operations:
+  publishTxCreated:
+    action: send
+    channel:
+      $ref: "#/channels/bank.tx.created"
+  publishSyncCompleted:
+    action: send
+    channel:
+      $ref: "#/channels/bank.sync.completed"
+  publishSyncFailed:
+    action: send
+    channel:
+      $ref: "#/channels/bank.sync.failed"
+  publishAccountUpdated:
+    action: send
+    channel:
+      $ref: "#/channels/bank.account.updated"
+components:
+  messages:
+    TxCreated:
+      name: TxCreated
+      title: Transaction Created Event
+      contentType: application/json
+      payload:
+        type: object
+        required:
+          - txId
+          - externalRef
+          - accountId
+          - source
+          - provider
+          - asset
+          - amount
+          - direction
+          - bookedAt
+        properties:
+          txId:
+            type: string
+            format: uuid
+            description: Internal transaction ID
+          externalRef:
+            type: string
+            description: Provider's transaction reference
+          accountId:
+            type: string
+            description: Account ID
+          source:
+            type: string
+            enum: [bank]
+            description: Transaction source
+          provider:
+            type: string
+            enum: [gocardless]
+            description: Data provider
+          asset:
+            type: string
+            description: Currency code (EUR, USD, etc.)
+            examples: [EUR, USD, GBP]
+          amount:
+            type: number
+            description: Transaction amount (absolute value)
+          fee:
+            type: number
+            default: 0
+            description: Transaction fee
+          direction:
+            type: string
+            enum: [in, out]
+            description: Transaction direction
+          bookedAt:
+            type: string
+            format: date-time
+            description: Transaction booking date
+          valueDate:
+            type: string
+            format: date-time
+            description: Transaction value date
+          description:
+            type: ["string", "null"]
+            description: Transaction description
+          reference:
+            type: ["string", "null"]
+            description: Payment reference
+          counterparty:
+            type: object
+            properties:
+              name:
+                type: ["string", "null"]
+                description: Counterparty name
+              iban:
+                type: ["string", "null"]
+                description: Counterparty IBAN
+              bic:
+                type: ["string", "null"]
+                description: Counterparty BIC
+          metadata:
+            type: object
+            additionalProperties: true
+            description: Additional provider-specific data
+    SyncCompleted:
+      name: SyncCompleted
+      title: Sync Completed Event
+      contentType: application/json
+      payload:
+        type: object
+        required:
+          - operationId
+          - accountId
+          - provider
+          - syncedAt
+          - transactionCount
+        properties:
+          operationId:
+            type: string
+            format: uuid
+          accountId:
+            type: string
+          provider:
+            type: string
+          syncedAt:
+            type: string
+            format: date-time
+          transactionCount:
+            type: integer
+            minimum: 0
+          fromDate:
+            type: string
+            format: date
+          toDate:
+            type: string
+            format: date
+          cursor:
+            type: string
+            description: Last cursor position
+    SyncFailed:
+      name: SyncFailed
+      title: Sync Failed Event
+      contentType: application/json
+      payload:
+        type: object
+        required:
+          - operationId
+          - accountId
+          - provider
+          - failedAt
+          - error
+        properties:
+          operationId:
+            type: string
+            format: uuid
+          accountId:
+            type: string
+          provider:
+            type: string
+          failedAt:
+            type: string
+            format: date-time
+          error:
+            type: string
+          details:
+            type: object
+          retryable:
+            type: boolean
+            default: true
+    AccountUpdated:
+      name: AccountUpdated
+      title: Account Updated Event
+      contentType: application/json
+      payload:
+        type: object
+        required:
+          - accountId
+          - provider
+          - updatedAt
+        properties:
+          accountId:
+            type: string
+          provider:
+            type: string
+          updatedAt:
+            type: string
+            format: date-time
+          balance:
+            type: number
+          currency:
+            type: string
+          name:
+            type: string
+          iban:
+            type: string
+          status:
+            type: string
+            enum: [active, inactive, suspended]

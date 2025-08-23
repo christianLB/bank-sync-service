@@ -1,0 +1,221 @@
+openapi: 3.1.0
+info:
+  title: bank-sync-service
+  version: 1.0.0
+  description: Bank synchronization service with GoCardless integration
+servers:
+  - url: /v1
+    description: API v1
+paths:
+  /health:
+    get:
+      operationId: healthCheck
+      summary: Health check endpoint
+      tags: [System]
+      responses:
+        "200":
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+  /ready:
+    get:
+      operationId: readyCheck
+      summary: Readiness check endpoint
+      tags: [System]
+      responses:
+        "200":
+          description: Service is ready
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+  /accounts:
+    get:
+      operationId: listAccounts
+      summary: List bank accounts
+      tags: [Accounts]
+      responses:
+        "200":
+          description: List of accounts
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  accounts:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Account"
+  /sync/{accountId}:
+    post:
+      operationId: startSync
+      summary: Start synchronization for an account
+      tags: [Sync]
+      parameters:
+        - in: path
+          name: accountId
+          required: true
+          schema:
+            type: string
+          description: Account ID to sync
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                fromDate:
+                  type: string
+                  format: date
+                  description: Optional start date for sync
+                toDate:
+                  type: string
+                  format: date
+                  description: Optional end date for sync
+      responses:
+        "202":
+          description: Sync accepted
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [operationId]
+                properties:
+                  operationId:
+                    type: string
+                    format: uuid
+                    description: Operation tracking ID
+        "409":
+          description: Sync already in progress
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /operations/{operationId}:
+    get:
+      operationId: getOperation
+      summary: Get operation status
+      tags: [Operations]
+      parameters:
+        - in: path
+          name: operationId
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Operation status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Operation"
+        "404":
+          description: Operation not found
+  /webhook/gocardless:
+    post:
+      operationId: gcWebhook
+      summary: GoCardless webhook endpoint
+      tags: [Webhooks]
+      security:
+        - webhookSignature: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                events:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                      created_at:
+                        type: string
+                        format: date-time
+                      resource_type:
+                        type: string
+                      action:
+                        type: string
+                      links:
+                        type: object
+                      details:
+                        type: object
+      responses:
+        "200":
+          description: Webhook processed
+        "401":
+          description: Invalid signature
+components:
+  schemas:
+    Account:
+      type: object
+      required: [id, name, provider, iban, currency, balance]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        provider:
+          type: string
+          enum: [gocardless]
+        iban:
+          type: string
+        currency:
+          type: string
+        balance:
+          type: number
+        lastSyncAt:
+          type: string
+          format: date-time
+    Operation:
+      type: object
+      required: [operationId, status, startedAt]
+      properties:
+        operationId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [pending, in_progress, completed, failed]
+        startedAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: string
+          format: date-time
+        processed:
+          type: integer
+          minimum: 0
+        errors:
+          type: array
+          items:
+            type: string
+    Error:
+      type: object
+      required: [error, message]
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+        details:
+          type: object
+  securitySchemes:
+    webhookSignature:
+      type: apiKey
+      in: header
+      name: X-Signature
