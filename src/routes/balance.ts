@@ -269,7 +269,13 @@ const plugin: FastifyPluginAsync = async (fastify) => {
         const isRateLimited = await redis.get(rateLimitKey);
         const dailyCount = await redis.get(dailyKey);
         
-        if (isRateLimited || (dailyCount && parseInt(dailyCount) >= 10)) {
+        if (isRateLimited || (dailyCount && parseInt(dailyCount) >= DAILY_LIMIT)) {
+          // Send notification about rate limit status
+          await sendBalanceSyncNotification({
+            accountId,
+            error: `Account is rate limited (${parseInt(dailyCount || '0')}/${DAILY_LIMIT} daily requests used) - will retry when available`
+          });
+          
           // Return cached data
           const cachedBalance = await redis.get(`balance:${accountId}`);
           if (cachedBalance) {
@@ -344,6 +350,12 @@ const plugin: FastifyPluginAsync = async (fastify) => {
             const retryAfter = error.response.headers['retry-after'] || '3600';
             await redis.setex(rateLimitKey, parseInt(retryAfter), (Date.now() + parseInt(retryAfter) * 1000).toString());
             
+            // Send notification for rate limit
+            await sendBalanceSyncNotification({
+              accountId,
+              error: 'Rate limit exceeded during bulk sync - will retry automatically'
+            });
+            
             results.push({
               accountId,
               status: 'rate_limited',
@@ -352,6 +364,12 @@ const plugin: FastifyPluginAsync = async (fastify) => {
             });
             rateLimited++;
           } else {
+            // Send notification for other errors
+            await sendBalanceSyncNotification({
+              accountId,
+              error: error.message || 'Unknown error during balance sync'
+            });
+            
             results.push({
               accountId,
               status: 'error',

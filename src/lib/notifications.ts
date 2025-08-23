@@ -10,6 +10,11 @@ function getCommApi(): MessagesApi | null {
   }
 
   if (!commApi) {
+    logger.info({ 
+      url: process.env.COMM_SERVICE_URL,
+      tokenLength: process.env.COMM_SERVICE_TOKEN.length 
+    }, 'Initializing comm service API client');
+    
     const config = new Configuration({
       basePath: process.env.COMM_SERVICE_URL,
       accessToken: process.env.COMM_SERVICE_TOKEN
@@ -35,6 +40,8 @@ export async function sendSyncCompleteNotification(data: SyncNotificationData): 
   if (!api) return;
 
   try {
+    logger.info({ accountId: data.accountId, operationId: data.operationId }, 'Attempting to send sync complete notification');
+    
     await api.v1MessagesSendPost({
       channel: 'telegram',
       template_key: 'sync.complete',
@@ -51,9 +58,9 @@ export async function sendSyncCompleteNotification(data: SyncNotificationData): 
       to: {} // Empty - uses admin IDs from comm-service
     });
     
-    logger.info({ accountId: data.accountId, operationId: data.operationId }, 'Sync complete notification sent');
-  } catch (err) {
-    logger.error({ err, data }, 'Failed to send sync complete notification');
+    logger.info({ accountId: data.accountId, operationId: data.operationId }, 'Sync complete notification sent successfully');
+  } catch (err: any) {
+    logger.error({ err: err.message || err, data }, 'Failed to send sync complete notification');
   }
 }
 
@@ -96,6 +103,8 @@ export async function sendBalanceSyncNotification(data: {
     const isError = !!data.error;
     const templateKey = isError ? 'balance.sync.failed' : 'balance.sync.complete';
     
+    logger.info({ accountId: data.accountId, isError, templateKey }, 'Attempting to send balance sync notification');
+    
     await api.v1MessagesSendPost({
       channel: 'telegram',
       template_key: templateKey,
@@ -113,8 +122,8 @@ export async function sendBalanceSyncNotification(data: {
       to: {} // Empty - uses admin IDs from comm-service
     });
     
-    logger.info({ accountId: data.accountId }, `Balance sync notification sent (${isError ? 'failed' : 'complete'})`);
-  } catch (err) {
-    logger.error({ err, data }, 'Failed to send balance sync notification');
+    logger.info({ accountId: data.accountId }, `Balance sync notification sent successfully (${isError ? 'failed' : 'complete'})`);
+  } catch (err: any) {
+    logger.error({ err: err.message || err, data, url: process.env.COMM_SERVICE_URL }, 'Failed to send balance sync notification');
   }
 }
