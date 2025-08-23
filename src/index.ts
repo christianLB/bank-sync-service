@@ -7,6 +7,7 @@ import webhook from './routes/webhook-gc';
 import auth from './routes/auth';
 import requisitions from './routes/requisitions';
 import balance from './routes/balance';
+import notifications from './routes/notifications';
 import { initRedis, closeRedis } from './lib/redis';
 import { getScheduler } from './lib/scheduler';
 import { config } from './config';
@@ -55,6 +56,7 @@ async function bootstrap() {
   await app.register(balance, { prefix: '/v1' });
   await app.register(sync, { prefix: '/v1' });
   await app.register(webhook, { prefix: '/v1' });
+  await app.register(notifications, { prefix: '/v1' });
 
   // Error handler
   app.setErrorHandler((error, request, reply) => {
