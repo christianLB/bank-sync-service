@@ -269,3 +269,13 @@ gc-sync: ## Sync transactions (requires ACCOUNT_ID env var)
 	fi
 	@echo "$(GREEN)Starting sync for account $$ACCOUNT_ID...$(NC)"
 	@curl -s -X POST http://192.168.1.11:4010/v1/sync/$$ACCOUNT_ID | jq .
+
+# === NOTIFICATIONS ===
+test-notifications: ## Test notification system (requires COMM_SERVICE_* env vars)
+	@if [ -z "$$COMM_SERVICE_URL" ] || [ -z "$$COMM_SERVICE_TOKEN" ]; then \
+		echo "$(YELLOW)Warning: COMM_SERVICE_URL and COMM_SERVICE_TOKEN not set - notifications disabled$(NC)"; \
+	else \
+		echo "$(GREEN)Notifications configured: $$COMM_SERVICE_URL$(NC)"; \
+	fi
+	@echo "$(GREEN)Testing balance sync with notifications...$(NC)"
+	@make sync-balances

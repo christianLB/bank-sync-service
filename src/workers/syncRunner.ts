@@ -8,6 +8,7 @@ import { getRedis } from '../lib/redis';
 import { logger } from '../logger';
 import { config } from '../config';
 import { BankTransaction, SyncOperation } from '../types';
+import { sendSyncCompleteNotification, sendSyncFailedNotification } from '../lib/notifications';
 
 const OPERATION_PREFIX = 'gc:op:';
 const OPERATION_TTL = 7 * 24 * 60 * 60; // 7 days
@@ -57,6 +58,15 @@ export async function startSync(
       toDate: options.toDate,
     });
 
+    // Send notification
+    await sendSyncCompleteNotification({
+      accountId,
+      operationId,
+      transactionCount: operation?.processed || 0,
+      fromDate: options.fromDate,
+      toDate: options.toDate
+    });
+
     logger.info({ accountId, operationId }, 'Sync completed successfully');
   } catch (err: any) {
     logger.error({ err, accountId, operationId }, 'Sync failed');
@@ -76,6 +86,14 @@ export async function startSync(
       failedAt: new Date().toISOString(),
       error: err.message || 'Unknown error',
       retryable: true,
+    });
+
+    // Send notification
+    await sendSyncFailedNotification({
+      accountId,
+      operationId,
+      error: err.message || 'Unknown error',
+      retryable: true
     });
 
     throw err;

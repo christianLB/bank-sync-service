@@ -3,6 +3,7 @@ import { getGCClient } from '../lib/gcClient';
 import { getRequisitionManager } from '../lib/requisition';
 import { getRedis } from '../lib/redis';
 import { logger } from '../logger';
+import { sendBalanceSyncNotification } from '../lib/notifications';
 
 const BALANCE_CACHE_TTL = 3600; // 1 hour cache
 const RATE_LIMIT_KEY = 'gc:ratelimit:';
@@ -142,6 +143,13 @@ const plugin: FastifyPluginAsync = async (fastify) => {
         
         logger.info({ accountId }, 'Balance fetched successfully');
         
+        // Send notification for successful balance sync
+        await sendBalanceSyncNotification({
+          accountId,
+          balance: parseFloat(balanceData?.balanceAmount?.amount || '0'),
+          currency: balanceData?.balanceAmount?.currency
+        });
+        
         return reply.send({
           balance: balanceData,
           cached: false,
@@ -164,6 +172,12 @@ const plugin: FastifyPluginAsync = async (fastify) => {
             retryAfter,
             message: error.response?.data?.detail || 'Rate limit exceeded'
           }, 'GoCardless rate limit hit');
+          
+          // Send notification for rate limit
+          await sendBalanceSyncNotification({
+            accountId,
+            error: 'Rate limit exceeded - will retry automatically'
+          });
           
           // Return cached data if available
           if (cached) {
@@ -304,6 +318,13 @@ const plugin: FastifyPluginAsync = async (fastify) => {
           // Update daily count
           await redis.incr(dailyKey);
           await redis.expire(dailyKey, 86400);
+          
+          // Send notification for successful balance sync
+          await sendBalanceSyncNotification({
+            accountId,
+            balance: parseFloat(balanceData?.balanceAmount?.amount || '0'),
+            currency: balanceData?.balanceAmount?.currency
+          });
           
           results.push({
             accountId,
