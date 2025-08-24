@@ -453,6 +453,20 @@ const plugin: FastifyPluginAsync = async (fastify) => {
       });
     }
   });
+
+  // NOTIFICATION TEST
+  fastify.post('/test-notification', async () => {
+    const { sendBalanceSyncNotification } = await import('../lib/notifications');
+    try {
+      await sendBalanceSyncNotification({
+        accountId: 'test-account',
+        error: 'Direct test from balance route'
+      });
+      return { success: true, message: 'Notification sent' };
+    } catch (err: any) {
+      return { success: false, error: err.message };
+    }
+  });
 };
 
 export default plugin;

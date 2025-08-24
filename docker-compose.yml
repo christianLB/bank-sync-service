@@ -28,7 +28,7 @@ services:
       retries: 3
 
   bank-sync-service:
-    image: bank-sync-service:latest
+    build: .
     container_name: bank-sync-service
     restart: unless-stopped
     networks:

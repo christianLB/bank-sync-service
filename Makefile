@@ -286,11 +286,9 @@ gc-sync: ## Sync transactions (requires ACCOUNT_ID env var)
 	@curl -s -X POST http://192.168.1.11:4010/v1/sync/$$ACCOUNT_ID | jq .
 
 # === NOTIFICATIONS ===
-test-notification: ## Send test notification via comm service
+test-notification: ## Send test notification via comm service  
 	@echo "$(GREEN)📱 Testing notification system...$(NC)"
-	@curl -s -X POST http://192.168.1.11:4010/v1/notifications/test \
-		-H "Content-Type: application/json" \
-		-d '{"message": "Test notification from Bank Sync Service", "accountId": "test-account"}' | jq '.'
+	@node test-notification.js
 
 test-notifications: ## Test notification system (requires COMM_SERVICE_* env vars)
 	@if [ -z "$$COMM_SERVICE_URL" ] || [ -z "$$COMM_SERVICE_TOKEN" ]; then \

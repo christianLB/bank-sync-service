@@ -79,3 +79,6 @@ redis-data/
 
 # Generated files
 .last_*
+
+# npm registry auth (keep for Docker build)
+# .npmrc
