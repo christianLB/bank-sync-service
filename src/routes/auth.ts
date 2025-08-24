@@ -97,6 +97,15 @@ const plugin: FastifyPluginAsync = async (fastify) => {
       });
     }
   });
+
+  // Temporary test endpoint for notifications
+  fastify.post('/notifications/test', async () => {
+    return { 
+      success: true,
+      message: 'Test endpoint working from auth route',
+      timestamp: new Date().toISOString()
+    };
+  });
 };
 
 export default plugin;

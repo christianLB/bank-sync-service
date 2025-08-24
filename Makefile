@@ -84,9 +84,9 @@ deploy-nas: deploy-prepare ## Deploy to NAS
 	
 	@echo "$(YELLOW)Building and starting services on NAS...$(NC)"
 	ssh $(NAS_HOST) "cd $(NAS_PATH) && \
-		docker-compose build && \
-		docker-compose down && \
-		docker-compose up -d"
+		sudo /volume1/@appstore/ContainerManager/usr/bin/docker-compose build && \
+		sudo /volume1/@appstore/ContainerManager/usr/bin/docker-compose down && \
+		sudo /volume1/@appstore/ContainerManager/usr/bin/docker-compose up -d"
 	
 	@echo "$(GREEN)Deployment complete!$(NC)"
 	@echo "$(YELLOW)Service should be available at: http://192.168.1.11:4010$(NC)"
@@ -106,29 +106,44 @@ deploy-update: ## Update deployment on NAS (quick update without full rebuild)
 	
 	@echo "$(YELLOW)Rebuilding on NAS...$(NC)"
 	ssh $(NAS_HOST) "cd $(NAS_PATH) && \
-		docker-compose build bank-sync-service && \
-		docker-compose up -d bank-sync-service"
+		sudo /volume1/@appstore/ContainerManager/usr/bin/docker-compose build bank-sync-service && \
+		sudo /volume1/@appstore/ContainerManager/usr/bin/docker-compose up -d bank-sync-service"
 	
 	@echo "$(GREEN)Update complete!$(NC)"
 
 deploy-status: ## Check deployment status on NAS
 	@echo "$(GREEN)Checking deployment status...$(NC)"
-	@ssh $(NAS_HOST) "cd $(NAS_PATH) && docker-compose ps"
+	@ssh $(NAS_HOST) "cd $(NAS_PATH) && sudo /volume1/@appstore/ContainerManager/usr/bin/docker-compose ps"
 	@echo ""
 	@echo "$(YELLOW)Health check:$(NC)"
 	@curl -s http://192.168.1.11:4010/health | jq . || echo "$(RED)Service not responding$(NC)"
 
 deploy-logs: ## View logs from NAS deployment
 	@echo "$(GREEN)Fetching logs from NAS...$(NC)"
-	ssh $(NAS_HOST) "cd $(NAS_PATH) && docker-compose logs --tail=100 -f"
+	ssh $(NAS_HOST) "cd $(NAS_PATH) && sudo /volume1/@appstore/ContainerManager/usr/bin/docker-compose logs --tail=100 -f"
 
 deploy-restart: ## Restart services on NAS
 	@echo "$(YELLOW)Restarting services on NAS...$(NC)"
-	ssh $(NAS_HOST) "cd $(NAS_PATH) && docker-compose restart"
+	ssh $(NAS_HOST) "cd $(NAS_PATH) && sudo /volume1/@appstore/ContainerManager/usr/bin/docker-compose restart"
 
 deploy-stop: ## Stop services on NAS
 	@echo "$(YELLOW)Stopping services on NAS...$(NC)"
-	ssh $(NAS_HOST) "cd $(NAS_PATH) && docker-compose down"
+	ssh $(NAS_HOST) "cd $(NAS_PATH) && sudo /volume1/@appstore/ContainerManager/usr/bin/docker-compose down"
+
+deploy-rebuild: ## Rebuild and redeploy service completely
+	@echo "$(GREEN)🔄 Full rebuild and redeploy...$(NC)"
+	@make deploy-prepare
+	@echo "$(YELLOW)Uploading to NAS...$(NC)"
+	@scp bank-sync-service.tar.gz $(NAS_HOST):$(NAS_PATH)/
+	@echo "$(YELLOW)Extracting and rebuilding...$(NC)"
+	@ssh $(NAS_HOST) "cd $(NAS_PATH) && \
+		tar -xzf bank-sync-service.tar.gz && \
+		rm bank-sync-service.tar.gz && \
+		sudo /volume1/@appstore/ContainerManager/usr/bin/docker-compose build --no-cache bank-sync-service && \
+		sudo /volume1/@appstore/ContainerManager/usr/bin/docker-compose up -d bank-sync-service"
+	@echo "$(GREEN)✅ Rebuild complete!$(NC)"
+	@rm -f bank-sync-service.tar.gz
+	@make test-notification
 
 # Local testing with real GoCardless
 test-local: ## Test locally with docker-compose
