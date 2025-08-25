@@ -1,6 +1,7 @@
 import { FastifyPluginAsync } from 'fastify';
 import { getGCClient } from '../lib/gcClient';
 import { getCursor } from '../lib/cursor';
+import { getRedis } from '../lib/redis';
 import { logger } from '../logger';
 import { AccountInfo } from '../types';
 
@@ -39,15 +40,21 @@ const plugin: FastifyPluginAsync = async (fastify) => {
       const accounts: AccountInfo[] = await Promise.all(
         gcAccounts.map(async (acc) => {
           const cursor = await getCursor(acc.id);
-          const balance = await gcClient.getBalance(acc.id);
-          const details = await gcClient.getAccountDetails(acc.id);
+          // Get cached balance (don't make API call)
+          const redis = await getRedis();
+          const cachedBalance = await redis.get(`balance:${acc.id}`);
+          let balance = null;
+          if (cachedBalance) {
+            const parsed = JSON.parse(cachedBalance);
+            balance = parsed.balance;
+          }
           
           return {
             id: acc.id,
-            name: details?.name || acc.iban,
+            name: acc.iban, // Use IBAN as name instead of fetching details
             provider: 'gocardless',
             iban: acc.iban,
-            currency: details?.currency || balance?.balanceAmount?.currency || 'EUR',
+            currency: balance?.balanceAmount?.currency || 'EUR',
             balance: balance ? parseFloat(balance.balanceAmount.amount) : undefined,
             lastSyncAt: cursor?.updatedAt,
             status: acc.status === 'READY' ? 'active' : 'inactive' as const,

@@ -351,6 +351,88 @@ const plugin: FastifyPluginAsync = async (fastify) => {
       });
     }
   });
+
+  // Clean up duplicate requisitions
+  fastify.post('/requisitions/cleanup', {
+    schema: {
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            cleaned: { type: 'number' },
+            kept: { type: 'number' },
+            message: { type: 'string' }
+          }
+        }
+      }
+    }
+  }, async (_request, reply) => {
+    try {
+      const manager = getRequisitionManager();
+      const requisitions = await manager.listRequisitions();
+      
+      // Group by accounts (same account IDs = duplicates)
+      const groups = new Map<string, typeof requisitions.results>();
+      
+      for (const req of requisitions.results) {
+        if (req.status === 'LN') {
+          const key = req.accounts.sort().join(',');
+          if (!groups.has(key)) {
+            groups.set(key, []);
+          }
+          groups.get(key)!.push(req);
+        }
+      }
+      
+      let cleaned = 0;
+      let kept = 0;
+      
+      // Keep only the newest requisition in each group
+      for (const [, group] of groups) {
+        if (group.length > 1) {
+          // Sort by creation date, keep newest
+          group.sort((a: any, b: any) => new Date(b.created).getTime() - new Date(a.created).getTime());
+          const toKeep = group[0];
+          const toDelete = group.slice(1);
+          
+          kept++;
+          
+          // Delete the duplicates
+          const manager = getRequisitionManager();
+          for (const req of toDelete) {
+            try {
+              await manager.deleteRequisition(req.id);
+              cleaned++;
+              logger.info({ requisitionId: req.id, created: req.created }, 'Deleted duplicate requisition');
+            } catch (err) {
+              logger.error({ err, requisitionId: req.id }, 'Failed to delete duplicate requisition');
+            }
+          }
+          
+          logger.info({ 
+            kept: toKeep.id, 
+            deleted: toDelete.length,
+            accounts: toKeep.accounts 
+          }, 'Cleaned up duplicate requisitions for account group');
+        } else {
+          kept++;
+        }
+      }
+      
+      return {
+        cleaned,
+        kept,
+        message: `Cleaned up ${cleaned} duplicate requisitions, kept ${kept} unique ones`
+      };
+      
+    } catch (err) {
+      logger.error({ err }, 'Failed to clean up requisitions');
+      return reply.code(500).send({
+        error: 'CLEANUP_FAILED',
+        message: 'Failed to clean up duplicate requisitions',
+      });
+    }
+  });
 };
 
 export default plugin;

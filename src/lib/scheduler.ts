@@ -103,15 +103,15 @@ export class SmartScheduler extends EventEmitter {
     
     try {
       // Get all account IDs from requisitions
-      const { getGCClient } = await import('./gcClient');
-      const gcClient = getGCClient();
-      const requisitions = await gcClient.listRequisitions();
+      const { getRequisitionManager } = await import('./requisition');
+      const manager = getRequisitionManager();
+      const requisitions = await manager.listRequisitions();
       
       // Get all unique account IDs from active requisitions
       const accountIds = new Set<string>();
       for (const req of requisitions.results) {
         if (req.status === 'LN') { // Only linked requisitions
-          req.accounts.forEach(accountId => accountIds.add(accountId));
+          req.accounts.forEach((accountId: string) => accountIds.add(accountId));
         }
       }
       
