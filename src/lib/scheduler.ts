@@ -18,6 +18,7 @@ export class SmartScheduler extends EventEmitter {
   private isRunning = false;
   private queue: ScheduledTask[] = [];
   private intervalId?: NodeJS.Timeout;
+  private lastDailyCheck?: Date;
   
   // Rate limit tracking
   private readonly DAILY_LIMIT = 4; // GoCardless actual limit for balance endpoint
@@ -40,11 +41,23 @@ export class SmartScheduler extends EventEmitter {
     await this.loadPendingTasks();
     
     // Schedule periodic checks every 30 seconds
-    this.intervalId = setInterval(() => {
-      this.processTasks().catch(err => {
+    this.intervalId = setInterval(async () => {
+      try {
+        await this.processTasks();
+        
+        // Check if we need to schedule daily syncs (every 30 minutes)
+        const now = new Date();
+        if (!this.lastDailyCheck || (now.getTime() - this.lastDailyCheck.getTime()) > 30 * 60 * 1000) {
+          await this.scheduleDailySyncs();
+          this.lastDailyCheck = now;
+        }
+      } catch (err) {
         logger.error({ err }, 'Error processing scheduled tasks');
-      });
+      }
     }, 30000);
+    
+    // Schedule daily syncs for all accounts
+    await this.scheduleDailySyncs();
     
     // Process immediately
     await this.processTasks();
@@ -83,6 +96,53 @@ export class SmartScheduler extends EventEmitter {
     };
     
     await this.addTask(task);
+  }
+
+  async scheduleDailySyncs() {
+    const redis = await getRedis();
+    
+    try {
+      // Get all account IDs from requisitions
+      const { getGCClient } = await import('./gcClient');
+      const gcClient = getGCClient();
+      const requisitions = await gcClient.listRequisitions();
+      
+      // Get all unique account IDs from active requisitions
+      const accountIds = new Set<string>();
+      for (const req of requisitions.results) {
+        if (req.status === 'LN') { // Only linked requisitions
+          req.accounts.forEach(accountId => accountIds.add(accountId));
+        }
+      }
+      
+      logger.info({ accountCount: accountIds.size }, 'Scheduling daily syncs for all accounts');
+      
+      // Schedule both balance and transaction syncs for each account
+      for (const accountId of accountIds) {
+        // Check if we already have syncs scheduled for today
+        const today = new Date().toISOString().split('T')[0];
+        const balanceKey = `daily:balance:${accountId}:${today}`;
+        const transactionKey = `daily:transaction:${accountId}:${today}`;
+        
+        const balanceScheduled = await redis.get(balanceKey);
+        const transactionScheduled = await redis.get(transactionKey);
+        
+        if (!balanceScheduled) {
+          await this.scheduleBalanceSync(accountId, 5);
+          await redis.setex(balanceKey, 86400, '1'); // Mark as scheduled for today
+          logger.info({ accountId }, 'Scheduled daily balance sync');
+        }
+        
+        if (!transactionScheduled) {
+          await this.scheduleTransactionSync(accountId, 3);
+          await redis.setex(transactionKey, 86400, '1'); // Mark as scheduled for today
+          logger.info({ accountId }, 'Scheduled daily transaction sync');
+        }
+      }
+      
+    } catch (err) {
+      logger.error({ err }, 'Failed to schedule daily syncs');
+    }
   }
 
   private async addTask(task: ScheduledTask) {
