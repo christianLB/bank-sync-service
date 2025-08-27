@@ -139,8 +139,9 @@ deploy-rebuild: ## Rebuild and redeploy service completely
 	@ssh $(NAS_HOST) "cd $(NAS_PATH) && \
 		tar -xzf bank-sync-service.tar.gz && \
 		rm bank-sync-service.tar.gz && \
+		sudo /volume1/@appstore/ContainerManager/usr/bin/docker-compose down && \
 		sudo /volume1/@appstore/ContainerManager/usr/bin/docker-compose build --no-cache bank-sync-service && \
-		sudo /volume1/@appstore/ContainerManager/usr/bin/docker-compose up -d bank-sync-service"
+		sudo /volume1/@appstore/ContainerManager/usr/bin/docker-compose up -d"
 	@echo "$(GREEN)✅ Rebuild complete!$(NC)"
 	@rm -f bank-sync-service.tar.gz
 	@make test-notification
